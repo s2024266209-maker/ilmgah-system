@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+console.log("Checking API Key:", import.meta.env.VITE_FIREBASE_API_KEY);
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
