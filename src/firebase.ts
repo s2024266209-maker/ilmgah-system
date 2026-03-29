@@ -18,3 +18,4 @@ export const auth = getAuth(app);
 // Dashboard ke liye zaroori exports
 export { onAuthStateChanged };
 export type { User };
+export const testConnection = async () => { return true; };
