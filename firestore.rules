@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: books
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required)
+    //   - author: string (required)
+    //   - isbn: string (required)
+    //   - category: string (required)
+    //   - status: string (required, enum: ["available", "reserved", "borrowed"])
+    //   - cover: string (optional)
+    //   - description: string (optional)
+    //   - publishedYear: number (optional)
+    //   - totalCopies: number (optional)
+    //   - availableCopies: number (optional)
+    //
+    // Collection: users
+    // Document ID: auth.uid
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (required, enum: ["admin", "student"])
+    //   - status: string (required, enum: ["active", "inactive"])
+    //   - id: string (optional)
+    //
+    // Collection: transactions
+    // Document ID: auto-generated
+    // Fields:
+    //   - bookId: string (required)
+    //   - userId: string (required)
+    //   - borrowDate: string (required, ISO 8601)
+    //   - dueDate: string (required, ISO 8601)
+    //   - returnDate: string (optional, ISO 8601)
+    //   - status: string (required, enum: ["borrowed", "returned", "overdue"])
+    //   - fineAmount: number (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+         (request.auth.token.email == "mehmoodrehan708@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidBook(data) {
+      return data.keys().hasAll(['title', 'author', 'isbn', 'category', 'status']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.author is string && data.author.size() > 0 && data.author.size() < 100 &&
+             data.isbn is string && data.isbn.size() > 0 && data.isbn.size() < 20 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 50 &&
+             data.status in ['available', 'reserved', 'borrowed'];
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email', 'role', 'status']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['admin', 'student'] &&
+             data.status in ['active', 'inactive'];
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['bookId', 'userId', 'borrowDate', 'dueDate', 'status']) &&
+             data.bookId is string &&
+             data.userId is string &&
+             data.borrowDate is string &&
+             data.dueDate is string &&
+             data.status in ['borrowed', 'returned', 'overdue'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /books/{bookId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() && isValidBook(request.resource.data);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && isValidTransaction(request.resource.data) && (request.auth.uid == request.resource.data.userId || isAdmin());
+      allow update: if isAuthenticated() && isValidTransaction(request.resource.data) && (request.auth.uid == resource.data.userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+  }
+}
